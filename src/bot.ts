@@ -19,7 +19,7 @@ bot.use(session({ initial: () => ({ step: null, data: {} }) }));
 // START
 bot.command("start", (ctx) => {
     ctx.reply(
-        "/set_profile\n/add_meal\n/today\n/my_profile"
+        "/set_profile - Задаать характеристики\n/add_meal - Додати прийом їжі\n/today - Сьогоднішні записи\n/my_profile - Мій профіль\n/plan - Рекомендована норма\n/reset - Скинути профіль"
     );
 });
 
@@ -90,11 +90,13 @@ bot.command("add_meal", async (ctx) => {
 });
 
 bot.command("today", async (ctx) => {
-    const meals = await db.all(
-        `SELECT * FROM meals WHERE user_id = ?`,
-        ctx.from!.id
-    );
+    const today = new Date().toISOString().slice(0, 10);
 
+    const meals = await db.all(
+        `SELECT * FROM meals WHERE user_id = ? AND date(timestamp) = ?`,
+        ctx.from!.id,
+        today
+    );
     if (!meals.length) {
         return ctx.reply("🍽️ Сьогодні ще немає записів");
     }
@@ -110,6 +112,55 @@ bot.command("today", async (ctx) => {
     msg += `\n🔥 Всього: ${total} kcal`;
 
     ctx.reply(msg);
+});
+
+bot.command("plan", async (ctx) => {
+    const profile = await getProfile(ctx.from!.id);
+
+    console.log(profile);
+
+    if (!profile) {
+        return ctx.reply("❌ Спочатку заповніть профіль через /set_profile");
+    }
+
+    if (!profile.goal) {
+        return ctx.reply("⚠️ Виберіть ціль у профілі");
+    }
+
+    const goals = {
+        lose: {
+            calories: profile.tdee - 400,
+            text: "схуднення",
+        },
+        maintain: {
+            calories: profile.tdee,
+            text: "підтримка ваги",
+        },
+        gain: {
+            calories: profile.tdee + 300,
+            text: "набір маси",
+        },
+    };
+
+    const result = goals[profile.goal as keyof typeof goals];
+
+    if (!result) {
+        return ctx.reply("⚠️ Невідома ціль. Оновіть /set_profile");
+    }
+
+    return ctx.reply(
+        `📋 Ваша ціль: ${result.text}\n\n` +
+        `🔥 Рекомендована норма: ${Math.round(result.calories)} kcal / день`
+    );
+});
+
+bot.command("reset", async (ctx) => {
+    await db.run(`DELETE FROM users WHERE telegram_id = ?`, ctx.from!.id);
+    await db.run(`DELETE FROM meals WHERE user_id = ?`, ctx.from!.id);
+
+    ctx.session = { step: null, data: {} };
+
+    return ctx.reply("🗑️ Все данные удалены. Профиль сброшен.");
 });
 
 /* ---------------- SESSION FLOW ---------------- */
@@ -143,9 +194,37 @@ bot.on("message:text", async (ctx) => {
     }
 
     if (step === "activity") {
+    ctx.session.data.activity = text;
+    ctx.session.step = "goal";
+
+    if (step === "goal") {
         const d = ctx.session.data;
 
-        d.activity = text;
+        d.goal = text;
+
+        d.bmr = calculateBMR(d.weight, d.height, d.age, d.sex);
+        d.tdee = calculateTDEE(d.bmr, d.activity);
+
+        await saveProfile(ctx.from!.id, d); // 🔥 ВАЖНО СРАЗУ СОХРАНЯЕМ
+
+        ctx.session.step = null;
+
+        return ctx.reply("✅ Профіль збережено");
+    }
+
+    return ctx.reply(
+        "Яка ваша ціль?\n\n" +
+        "🔻 lose — схуднення\n" +
+        "⚖️ maintain — підтримка\n" +
+        "🔺 gain — набір маси"
+    );
+    }
+
+    if (step === "goal") {
+        const d = ctx.session.data;
+
+        d.goal = text;
+
         d.bmr = calculateBMR(d.weight, d.height, d.age, d.sex);
         d.tdee = calculateTDEE(d.bmr, d.activity);
 

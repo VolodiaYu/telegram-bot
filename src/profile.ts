@@ -18,45 +18,75 @@ export function calculateTDEE(bmr: number, activity: string) {
         medium: 1.55,
         high: 1.725,
     };
-    return bmr * map[activity];
+
+    return bmr * (map[activity] || 1.2);
 }
 
-export async function saveProfile(
-    telegramId: number,
-    data: any
-) {
+/* ---------------- SAVE PROFILE ---------------- */
+
+export async function saveProfile(userId: number, data: any) {
     await db.run(
-        `
-        INSERT INTO users
-        (telegram_id, age, weight, height, sex, activity_level, bmr, tdee)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(telegram_id) DO UPDATE SET
-            age=excluded.age,
-            weight=excluded.weight,
-            height=excluded.height,
-            sex=excluded.sex,
-            activity_level=excluded.activity_level,
-            bmr=excluded.bmr,
-            tdee=excluded.tdee
-        `,
-        telegramId,
+        `INSERT OR REPLACE INTO users
+        (telegram_id, age, height, weight, sex, activity_level, goal, bmr, tdee)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        userId,
         data.age,
-        data.weight,
         data.height,
+        data.weight,
         data.sex,
         data.activity,
+        data.goal || null,
         data.bmr,
         data.tdee
     );
 }
 
-export async function getProfile(telegramId: number) {
-    return await db.get(
-        `
-        SELECT age, weight, height, sex, activity_level, bmr, tdee
+/* ---------------- GET PROFILE ---------------- */
+
+export function getProfile(telegramId: number) {
+    return db.query(`
+        SELECT age, weight, height, sex, activity_level, goal, bmr, tdee
         FROM users
         WHERE telegram_id = ?
-        `,
-        telegramId
-    );
+    `).get(telegramId);
+}
+
+/* ---------------- CALORIES LOGIC ---------------- */
+
+/**
+ * Нормалізація goal (ВАЖЛИВО)
+ * щоб user міг писати:
+ * lose / 🔻 lose / "схуднення"
+ */
+export function normalizeGoal(input: string) {
+    const g = input.toLowerCase();
+
+    if (g.includes("lose") || g.includes("схуд")) return "lose";
+    if (g.includes("gain") || g.includes("набір")) return "gain";
+    if (g.includes("maintain") || g.includes("підтрим")) return "maintain";
+
+    return null;
+}
+
+/* ---------------- RECOMMENDED CALORIES ---------------- */
+
+export function getRecommendedCalories(tdee: number, goal: string) {
+    if (goal === "lose") return Math.round(tdee - 400);
+    if (goal === "gain") return Math.round(tdee + 300);
+    return Math.round(tdee);
+}
+
+/* ---------------- TEXT HELPERS ---------------- */
+
+export function getGoalText(goal: string) {
+    switch (goal) {
+        case "lose":
+            return "схуднення";
+        case "gain":
+            return "набір маси";
+        case "maintain":
+            return "підтримка";
+        default:
+            return "невідомо";
+    }
 }
