@@ -1,6 +1,8 @@
 import { Bot, session } from "grammy";
 import "dotenv/config";
 import { db } from "./db";
+import { Keyboard } from "grammy";
+
 
 import {
     calculateBMR,
@@ -16,12 +18,17 @@ const bot = new Bot(process.env.BOT_TOKEN!);
 // session
 bot.use(session({ initial: () => ({ step: null, data: {} }) }));
 
-// START
 bot.command("start", (ctx) => {
     ctx.reply(
-        "/set_profile - Задаать характеристики\n/add_meal - Додати прийом їжі\n/today - Сьогоднішні записи\n/my_profile - Мій профіль\n/plan - Рекомендована норма\n/reset - Скинути профіль"
+        "/set_profile - Задаать характеристики\n" +
+        "/add_meal - Додати прийом їжі\n" +
+        "/today - Сьогоднішні записи\n" +
+        "/my_profile - Мій профіль\n" +
+        "/plan - Рекомендована норма\n" +
+        "/reset - Скинути профіль",
     );
 });
+
 
 /* ---------------- PROFILE ---------------- */
 
@@ -162,7 +169,6 @@ bot.command("reset", async (ctx) => {
 
     return ctx.reply("🗑️ Все данные удалены. Профиль сброшен.");
 });
-
 /* ---------------- SESSION FLOW ---------------- */
 
 bot.on("message:text", async (ctx) => {
