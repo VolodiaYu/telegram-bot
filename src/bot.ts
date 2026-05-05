@@ -2,7 +2,12 @@ import { Bot, session } from "grammy";
 import "dotenv/config";
 import "./db";
 
-import { calculateBMR, calculateTDEE, saveProfile } from "./profile";
+import {
+    calculateBMR,
+    calculateTDEE,
+    saveProfile,
+    getProfile,
+} from "./profile";
 import { addMeal, todayMeals } from "./meals";
 
 const bot = new Bot(process.env.BOT_TOKEN!);
@@ -25,6 +30,27 @@ bot.command("add_meal", (ctx) => {
 });
 
 bot.command("today", todayMeals);
+
+bot.command("my_profile", async (ctx) => {
+    const profile = await getProfile(ctx.from.id);
+
+    if (!profile) {
+        ctx.reply("❌ Профіль не знайдено. Використай /set_profile");
+        return;
+    }
+
+    ctx.reply(
+        "📊 **Твій профіль:**\n\n" +
+            `Вік: ${profile.age}\n` +
+            `Зріст: ${profile.height} см\n` +
+            `Вага: ${profile.weight} кг\n` +
+            `Стать: ${profile.sex}\n` +
+            `Активність: ${profile.activity_level}\n\n` +
+            `🔥 BMR: ${Math.round(profile.bmr)} kcal\n` +
+            `⚡ TDEE: ${Math.round(profile.tdee)} kcal`,
+        { parse_mode: "Markdown" }
+    );
+});
 
 bot.on("message:text", async (ctx) => {
     const s = ctx.session.step;
@@ -67,6 +93,8 @@ bot.on("message:text", async (ctx) => {
         ctx.session.step = null;
     }
 });
+
+
 
 bot.start();
 console.log("🤖 BOT RUNNING");

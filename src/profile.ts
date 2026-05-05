@@ -49,3 +49,14 @@ export async function saveProfile(
         data.tdee
     );
 }
+
+export async function getProfile(telegramId: number) {
+    return await db.get(
+        `
+        SELECT age, weight, height, sex, activity_level, bmr, tdee
+        FROM users
+        WHERE telegram_id = ?
+        `,
+        telegramId
+    );
+}
